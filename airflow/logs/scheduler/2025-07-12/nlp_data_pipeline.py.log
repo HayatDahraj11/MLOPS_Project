@@ -906,3 +906,35 @@ Traceback (most recent call last):
 ModuleNotFoundError: No module named 'kaggle'
 [2025-07-12T01:01:09.060+0000] {processor.py:841} WARNING - No viable dags retrieved from /opt/airflow/dags/nlp_data_pipeline.py
 [2025-07-12T01:01:09.142+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/nlp_data_pipeline.py took 0.144 seconds
+[2025-07-12T01:01:39.255+0000] {processor.py:157} INFO - Started process (PID=7495) to work on /opt/airflow/dags/nlp_data_pipeline.py
+[2025-07-12T01:01:39.256+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/nlp_data_pipeline.py for tasks to queue
+[2025-07-12T01:01:39.257+0000] {logging_mixin.py:151} INFO - [2025-07-12T01:01:39.256+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/nlp_data_pipeline.py
+[2025-07-12T01:01:39.302+0000] {logging_mixin.py:151} INFO - [2025-07-12T01:01:39.296+0000] {dagbag.py:347} ERROR - Failed to import: /opt/airflow/dags/nlp_data_pipeline.py
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/models/dagbag.py", line 343, in parse
+    loader.exec_module(new_module)
+  File "<frozen importlib._bootstrap_external>", line 843, in exec_module
+  File "<frozen importlib._bootstrap>", line 219, in _call_with_frames_removed
+  File "/opt/airflow/dags/nlp_data_pipeline.py", line 11, in <module>
+    from src.data.data_loader import download_dataset, prepare_dataset
+  File "/opt/airflow/src/data/data_loader.py", line 2, in <module>
+    import kaggle
+ModuleNotFoundError: No module named 'kaggle'
+[2025-07-12T01:01:39.303+0000] {processor.py:841} WARNING - No viable dags retrieved from /opt/airflow/dags/nlp_data_pipeline.py
+[2025-07-12T01:01:39.340+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/nlp_data_pipeline.py took 0.090 seconds
+[2025-07-12T01:02:11.530+0000] {processor.py:157} INFO - Started process (PID=7505) to work on /opt/airflow/dags/nlp_data_pipeline.py
+[2025-07-12T01:02:11.534+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/nlp_data_pipeline.py for tasks to queue
+[2025-07-12T01:02:11.536+0000] {logging_mixin.py:151} INFO - [2025-07-12T01:02:11.536+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/nlp_data_pipeline.py
+[2025-07-12T01:02:11.911+0000] {logging_mixin.py:151} INFO - [2025-07-12T01:02:11.895+0000] {dagbag.py:347} ERROR - Failed to import: /opt/airflow/dags/nlp_data_pipeline.py
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/models/dagbag.py", line 343, in parse
+    loader.exec_module(new_module)
+  File "<frozen importlib._bootstrap_external>", line 843, in exec_module
+  File "<frozen importlib._bootstrap>", line 219, in _call_with_frames_removed
+  File "/opt/airflow/dags/nlp_data_pipeline.py", line 11, in <module>
+    from src.data.data_loader import download_dataset, prepare_dataset
+  File "/opt/airflow/src/data/data_loader.py", line 2, in <module>
+    import kaggle
+ModuleNotFoundError: No module named 'kaggle'
+[2025-07-12T01:02:11.917+0000] {processor.py:841} WARNING - No viable dags retrieved from /opt/airflow/dags/nlp_data_pipeline.py
+[2025-07-12T01:02:12.164+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/nlp_data_pipeline.py took 0.654 seconds
