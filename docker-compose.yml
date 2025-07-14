@@ -63,6 +63,8 @@ services:
       - ./src:/opt/airflow/src
       - ./kaggle:/home/airflow/.kaggle
       - ./data:/opt/airflow/data
+      # FIX 1: Add MLflow volume to Airflow containers for model registration
+      - ./mlflow:/opt/airflow/mlflow
     ports:
       - "8080:8080"
     command: webserver
@@ -90,21 +92,30 @@ services:
       - ./src:/opt/airflow/src
       - ./kaggle:/home/airflow/.kaggle
       - ./data:/opt/airflow/data
+      # FIX 2: Add MLflow volume to scheduler for model registration
+      - ./mlflow:/opt/airflow/mlflow
     command: scheduler
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.7.1
+    # FIX 3: Run as current user to fix permissions
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "5001:5001"
     volumes:
       - ./mlflow:/mlflow
-    command: mlflow server --host 0.0.0.0 --port 5001
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=sqlite:////mlflow/mlflow.db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    # FIX 4: Add --serve-artifacts flag for full model serving capability
+    command: mlflow server --host 0.0.0.0 --port 5001 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --workers 1 --serve-artifacts
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:5001/"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
       retries: 3
+      start_period: 40s
 
   fastapi:
     build:
@@ -118,6 +129,13 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5001
     volumes:
       - ./src:/app/src
+    # FIX 5: Add health check for FastAPI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   prometheus:
     image: prom/prometheus:v2.47.0
@@ -139,6 +157,8 @@ services:
       - ./monitoring/grafana:/var/lib/grafana
     depends_on:
       - prometheus
+    # FIX 6: Fix Grafana permissions
+    user: "${UID:-1000}:${GID:-1000}"
 
 volumes:
   postgres_data:
