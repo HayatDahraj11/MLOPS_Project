@@ -5,20 +5,26 @@ from sklearn.model_selection import train_test_split
 
 def download_dataset():
     """Downloads the News Category Dataset from Kaggle"""
+    print("Starting dataset download process...")
     os.makedirs('data/raw', exist_ok=True)
+    print(f"Raw data directory created at: {os.path.abspath('data/raw')}")
     
     if not os.path.exists('data/raw/News_Category_Dataset_v3.json'):
-        print("Downloading dataset from Kaggle...")
+        print("Dataset not found, attempting Kaggle download...")
         try:
             kaggle.api.authenticate()
+            print("Kaggle authentication successful")
             kaggle.api.dataset_download_files(
                 'rmisra/news-category-dataset',
                 path='data/raw',
                 unzip=True
             )
+            print("Dataset downloaded and extracted successfully")
         except Exception as e:
-            print(f"Error downloading dataset: {e}")
+            print(f"Error during download: {str(e)}")
             raise
+    else:
+        print("Dataset already exists in data/raw directory")
 
 def prepare_dataset():
     """Prepares and splits the dataset"""

@@ -1,0 +1,11 @@
+  airflow-webserver:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    # ... rest of your config ...
+
+  airflow-scheduler:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    # ... rest of your config ...

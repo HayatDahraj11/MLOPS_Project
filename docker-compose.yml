@@ -9,37 +9,79 @@ services:
       - POSTGRES_DB=airflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
 
-  airflow-webserver:
-    image: apache/airflow:2.7.1
+  airflow-init:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
     depends_on:
       - postgres
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__USERS__USERNAME=airflow
+      - AIRFLOW__USERS__PASSWORD=airflow123
+      - AIRFLOW__USERS__FIRSTNAME=Airflow
+      - AIRFLOW__USERS__LASTNAME=Admin
+      - AIRFLOW__USERS__EMAIL=admin@airflow.com
+      - AIRFLOW__USERS__ROLE=Admin
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: db init
+    restart: on-failure
+
+  airflow-webserver:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+      - airflow-init
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__AUTHENTICATE=True
+      - AIRFLOW__WEBSERVER__AUTH_BACKEND=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__USERS__USERNAME=airflow
+      - AIRFLOW__USERS__PASSWORD=airflow123
+      - AIRFLOW__USERS__FIRSTNAME=Airflow
+      - AIRFLOW__USERS__LASTNAME=Admin
+      - AIRFLOW__USERS__EMAIL=admin@airflow.com
+      - AIRFLOW__USERS__ROLE=Admin
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - ./src:/opt/airflow/src
       - ./kaggle:/home/airflow/.kaggle
+      - ./data:/opt/airflow/data
     ports:
       - "8080:8080"
     command: webserver
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 30s
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8080/health"]
+      interval: 10s
       timeout: 10s
       retries: 5
 
   airflow-scheduler:
-    image: apache/airflow:2.7.1
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
     depends_on:
       - postgres
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
     volumes:
       - ./airflow/dags:/opt/airflow/dags
@@ -47,15 +89,22 @@ services:
       - ./airflow/plugins:/opt/airflow/plugins
       - ./src:/opt/airflow/src
       - ./kaggle:/home/airflow/.kaggle
+      - ./data:/opt/airflow/data
     command: scheduler
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.7.1
     ports:
-      - "5000:5000"
+      - "5001:5001"
     volumes:
       - ./mlflow:/mlflow
-    command: mlflow server --host 0.0.0.0 --port 5000
+    command: mlflow server --host 0.0.0.0 --port 5001
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:5001/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   fastapi:
     build:
@@ -66,7 +115,7 @@ services:
     depends_on:
       - mlflow
     environment:
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_TRACKING_URI=http://mlflow:5001
     volumes:
       - ./src:/app/src
 

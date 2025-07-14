@@ -1,9 +1,8 @@
-# NLP Pipeline MLOps Project
+# MLOps Project: News Classification
 
-## Project Overview
-This project implements an end-to-end MLOps pipeline for text classification using the News Category Dataset. The pipeline includes data processing, model training, API serving, and monitoring.
+This project implements an end-to-end MLOps pipeline for news classification using NLP techniques.
 
-## Components
+## Project Structure
 - Data Pipeline (Apache Airflow)
 - Model Training and Tracking (MLflow)
 - Model Serving (FastAPI)
