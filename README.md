@@ -56,8 +56,8 @@ A production-ready MLOps pipeline for news article classification using modern D
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd mlops-news-classification
+   git clone <(https://github.com/HayatDahraj11/MLOPS_Project)>
+   cd MLOPS_project
    ```
 
 2. **Set up environment variables**
