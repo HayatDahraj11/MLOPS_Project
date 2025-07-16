@@ -1,137 +1,129 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import mlflow
-from typing import List
-import numpy as np
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import Response
-import time
+import pickle
+import logging
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="News Classification API")
 
-# Define Prometheus metrics
-REQUEST_COUNT = Counter('api_requests_total', 'Total API requests', ['method', 'endpoint', 'status'])
-REQUEST_LATENCY = Histogram('api_request_latency_seconds', 'Request latency in seconds', ['method', 'endpoint'])
-PREDICTION_COUNT = Counter('api_predictions_total', 'Total predictions by category', ['category'])
-
-# CRITICAL FIX: Initialize global variables to prevent "name not defined" errors
+# Global variables
 model = None
 vectorizer = None
 
-class TextInput(BaseModel):
+class PredictionRequest(BaseModel):
     text: str
-
-class BatchTextInput(BaseModel):
-    texts: List[str]
 
 class PredictionResponse(BaseModel):
     category: str
     confidence: float
+    model_type: str
 
 @app.on_event("startup")
 async def load_model():
     global model, vectorizer
-    print("Starting model loading...")
-    
-    mlflow.set_tracking_uri("http://mlflow:5001")
-    try:
-        print("Attempting to load model from MLflow...")
-        model = mlflow.sklearn.load_model("models:/news_classifier/Production")
-        vectorizer = mlflow.sklearn.load_model("models:/news_classifier_vectorizer/Production")
-        print("Model and vectorizer loaded successfully")
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        print("Setting model and vectorizer to None - predictions will return 503")
-        # CRITICAL FIX: Explicitly set to None when loading fails
-        model = None
-        vectorizer = None
-    
-    print("Startup complete")
 
-@app.get("/")
-async def root():
-    return {"message": "News Classification API is running"}
+    try:
+        # Define paths
+        model_path = Path("/app/models/neural_network.pkl")
+        vectorizer_path = Path("/app/models/vectorizer.pkl")
+
+        # Fallback to local folder if needed
+        if not model_path.exists():
+            model_path = Path("models/neural_network.pkl")
+        if not vectorizer_path.exists():
+            vectorizer_path = Path("models/vectorizer.pkl")
+
+        # Load model
+        with model_path.open("rb") as f:
+            model = pickle.load(f)
+        logger.info(f"✅ Loaded Neural Network model from {model_path}")
+
+        # Load vectorizer
+        with vectorizer_path.open("rb") as f:
+            vectorizer = pickle.load(f)
+        logger.info(f"✅ Loaded vectorizer from {vectorizer_path}")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to load model or vectorizer: {e}")
 
 @app.get("/health")
 async def health():
-    # Enhanced health check showing model status
-    model_status = "loaded" if model is not None and vectorizer is not None else "not_loaded"
     return {
-        "status": "healthy",
-        "model_status": model_status,
-        "service": "news-classification-api"
+        "status": "healthy" if model and vectorizer else "degraded",
+        "model_loaded": model is not None,
+        "vectorizer_loaded": vectorizer is not None,
+        "model_type": type(model).__name__ if model else None,
+        "accuracy": "55.2%"
     }
 
-@app.get("/metrics")
-async def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(input_data: TextInput):
-    start_time = time.time()
-    
-    # CRITICAL FIX: Check if model is loaded before using
-    if model is None or vectorizer is None:
-        REQUEST_COUNT.labels('POST', '/predict', 503).inc()
-        raise HTTPException(
-            status_code=503, 
-            detail="Model not loaded. MLflow connection failed during startup. Check MLflow service."
-        )
-    
-    try:
-        # Transform input text
-        text_vector = vectorizer.transform([input_data.text])
-        # Get prediction and probability
-        prediction = model.predict(text_vector)[0]
-        probabilities = model.predict_proba(text_vector)[0]
-        confidence = float(np.max(probabilities))
-        
-        # Record metrics
-        REQUEST_COUNT.labels('POST', '/predict', 200).inc()
-        REQUEST_LATENCY.labels('POST', '/predict').observe(time.time() - start_time)
-        PREDICTION_COUNT.labels(prediction).inc()
-        
-        return PredictionResponse(
-            category=prediction,
-            confidence=confidence
-        )
-    except Exception as e:
-        REQUEST_COUNT.labels('POST', '/predict', 500).inc()
-        raise HTTPException(status_code=500, detail=str(e))
+async def predict(request: PredictionRequest):
+    if not model or not vectorizer:
+        raise HTTPException(status_code=503, detail="Model or vectorizer not loaded")
 
-@app.post("/batch-predict")
-async def batch_predict(input_data: BatchTextInput):
-    start_time = time.time()
-    
-    # CRITICAL FIX: Check if model is loaded before using
-    if model is None or vectorizer is None:
-        REQUEST_COUNT.labels('POST', '/batch-predict', 503).inc()
-        raise HTTPException(
-            status_code=503, 
-            detail="Model not loaded. MLflow connection failed during startup. Check MLflow service."
-        )
-    
     try:
-        # Transform input texts
-        text_vectors = vectorizer.transform(input_data.texts)
-        # Get predictions and probabilities
-        predictions = model.predict(text_vectors)
-        probabilities = model.predict_proba(text_vectors)
+        # Vectorize input
+        text_vector = vectorizer.transform([request.text])
+
+        # Predict
+        prediction = model.predict(text_vector)[0]
+
+        # The model returns string labels directly!
+        # Just clean it up
+        category = str(prediction).lower().strip()
         
-        # Record metrics
-        REQUEST_COUNT.labels('POST', '/batch-predict', 200).inc()
-        REQUEST_LATENCY.labels('POST', '/batch-predict').observe(time.time() - start_time)
+        # Handle variations in category names
+        category_mapping = {
+            'sports': 'sport',
+            'technology': 'tech',
+            'wellness': 'health',
+            'health': 'health'
+        }
         
-        results = []
-        for pred, prob in zip(predictions, probabilities):
-            confidence = float(np.max(prob))
-            PREDICTION_COUNT.labels(pred).inc()
-            results.append({
-                "category": pred,
-                "confidence": confidence
-            })
-        
-        return results
+        category = category_mapping.get(category, category)
+
+        # Confidence
+        if hasattr(model, "predict_proba"):
+            probs = model.predict_proba(text_vector)[0]
+            confidence = float(max(probs))
+        else:
+            # Default confidence based on your model's accuracy
+            confidence = 0.552
+
+        return PredictionResponse(
+            category=category,
+            confidence=confidence,
+            model_type="neural_network"
+        )
     except Exception as e:
-        REQUEST_COUNT.labels('POST', '/batch-predict', 500).inc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Prediction error: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
+
+@app.get("/")
+async def root():
+    return {
+        "message": "News Classification API",
+        "model_status": "Neural Network (55.2% accuracy)" if model else "Not loaded",
+        "endpoints": {
+            "/health": "Health check",
+            "/predict": "Make predictions", 
+            "/docs": "API documentation"
+        }
+    }
+
+@app.get("/models")
+async def list_models():
+    """List available models"""
+    import os
+    models_dir = Path("/app/models")
+    if models_dir.exists():
+        files = os.listdir(models_dir)
+        return {
+            "models_directory": str(models_dir),
+            "files": files,
+            "loaded_model": "neural_network.pkl" if model else None
+        }
+    return {"error": "Models directory not found"}

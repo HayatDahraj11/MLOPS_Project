@@ -129,6 +129,7 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5001
     volumes:
       - ./src:/app/src
+      - ./models:/app/models 
     # FIX 5: Add health check for FastAPI
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
